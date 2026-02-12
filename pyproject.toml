@@ -1,0 +1,8 @@
+[project]
+name = "recommend-report"
+version = "1.0.0"
+description = "AI 車險推薦系統 API"
+requires-python = ">=3.9"
+
+[project.scripts]
+app = "app.index:app"
