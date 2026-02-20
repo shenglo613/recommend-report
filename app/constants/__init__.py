@@ -1,13 +1,21 @@
 from app.constants.insurance_rates import (
     INSURANCE_RATES,
     COVERAGE_AMOUNTS,
-    RADAR_CONFIGS,
+    MAX_INDEX,
+    COMPULSORY_RATES,
+    DISCOUNT_RATE,
     PACKAGE_NAMES,
+    REDUCE_PRIORITY,
+    PERSONA_TAG_MAP,
 )
 
 __all__ = [
     "INSURANCE_RATES",
     "COVERAGE_AMOUNTS",
-    "RADAR_CONFIGS",
+    "MAX_INDEX",
+    "COMPULSORY_RATES",
+    "DISCOUNT_RATE",
     "PACKAGE_NAMES",
+    "REDUCE_PRIORITY",
+    "PERSONA_TAG_MAP",
 ]

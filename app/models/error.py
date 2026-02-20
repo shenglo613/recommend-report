@@ -30,7 +30,7 @@ class ErrorResponse(BaseModel):
                     "message": "請求資料驗證失敗",
                     "details": [
                         {
-                            "field": "body -> profile -> car_details -> car_year",
+                            "field": "body -> profile -> car_details -> registration_year",
                             "message": "Field required",
                             "type": "missing"
                         }

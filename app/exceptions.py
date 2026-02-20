@@ -68,3 +68,38 @@ class InsuranceCalculationException(BusinessException):
     def __init__(self, message: str):
         super().__init__(message=message)
         self.code = "INSURANCE_CALCULATION_ERROR"
+
+
+class PlateNotFoundException(BusinessException):
+    """車牌查無資料"""
+    def __init__(self, message: str = "查無此車牌資料，請確認車牌號碼是否正確。"):
+        super().__init__(message=message)
+        self.code = "PLATE_NOT_FOUND"
+
+
+class InvalidIdFormatException(ValidationException):
+    """身分證格式錯誤"""
+    def __init__(self, message: str = "身分證格式錯誤，請輸入正確的身分證字號。"):
+        super().__init__(message=message)
+        self.code = "INVALID_ID_FORMAT"
+
+
+class InvalidPlateFormatException(ValidationException):
+    """車牌格式錯誤"""
+    def __init__(self, message: str = "車牌格式錯誤，請輸入正確的車牌號碼。"):
+        super().__init__(message=message)
+        self.code = "INVALID_PLATE_FORMAT"
+
+
+class CarDataMismatchException(BusinessException):
+    """車籍資料不符"""
+    def __init__(self, message: str = "車籍資料異常，請確認資料是否正確。"):
+        super().__init__(message=message)
+        self.code = "CAR_DATA_MISMATCH"
+
+
+class QAMissingFieldException(ValidationException):
+    """問卷有未填類別"""
+    def __init__(self, message: str = "問卷有未填類別，請完成所有 5 類問卷。"):
+        super().__init__(message=message)
+        self.code = "QA_MISSING_FIELD"

@@ -7,11 +7,13 @@ from app.models.request import (
 from app.models.response import (
     RadarData,
     AnalysisResults,
-    CoverageOption,
+    CompulsoryInsurance,
+    InsuranceItem,
+    PriceSummary,
+    AdjustableItem,
     RecommendedPlan,
     CustomPlan,
     Plans,
-    PriceSummary,
     AIProposal,
     InsuranceRecommendResponse,
 )
@@ -30,11 +32,13 @@ __all__ = [
     # Response
     "RadarData",
     "AnalysisResults",
-    "CoverageOption",
+    "CompulsoryInsurance",
+    "InsuranceItem",
+    "PriceSummary",
+    "AdjustableItem",
     "RecommendedPlan",
     "CustomPlan",
     "Plans",
-    "PriceSummary",
     "AIProposal",
     "InsuranceRecommendResponse",
     # Error
