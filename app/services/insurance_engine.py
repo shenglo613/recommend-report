@@ -6,7 +6,6 @@ from app.constants.insurance_rates import (
     COVERAGE_AMOUNTS,
     MAX_INDEX,
     COMPULSORY_RATES,
-    DISCOUNT_RATE,
     PACKAGE_NAMES,
     REDUCE_PRIORITY,
     PERSONA_TAG_MAP,
@@ -80,7 +79,7 @@ class InsuranceEngine:
     def apply_questionnaire(self, qa: AnalysisQA):
         """第二層：問卷位移邏輯（PRD 第 8 章，每類單選）"""
 
-        # 第一類：車內人安全感
+        # 第一類：車內人安全感（影響 C 乘客、D 駕駛）
         if qa.passenger_preference == "high_passenger_medical":
             self.indices["C"] += 1
         elif qa.passenger_preference == "high_driver_disability":
@@ -90,15 +89,15 @@ class InsuranceEngine:
         elif qa.passenger_preference == "high_driver_medical":
             self.indices["D"] += 1
 
-        # 第二類：本車愛護程度
+        # 第二類：本車愛護程度（影響 E 車體、F 免追償、H 竊盜）
         if qa.vehicle_protection == "repair_perfectionist":
-            self.indices["E"] -= 1  # E 反向：升級
+            self.indices["E"] -= 1  # E 反向：升級（例如丙升乙）
         elif qa.vehicle_protection == "waive_subrogation":
-            self.indices["F"] = 3   # 解鎖
+            self.indices["F"] = 3   # 解鎖免追償
         elif qa.vehicle_protection == "theft_protection":
-            self.indices["H"] = 1   # 解鎖
+            self.indices["H"] = 1   # 解鎖竊盜險
         elif qa.vehicle_protection == "basic_repair":
-            self.indices["E"] += 2  # E 反向：降級
+            self.indices["E"] += 2  # E 反向：降級或移除
 
         # 第三類：車外人責任心
         if qa.liability_concern == "high_excess_liability":
@@ -111,10 +110,9 @@ class InsuranceEngine:
         elif qa.liability_concern == "high_property_damage":
             self.indices["A"] += 1
 
-        # 第四類：費用/服務應援
+        # 第四類：費用/服務應援（影響 G 救援、I 刑事、J 慰問金）
         if qa.service_needs == "roadside_assistance_100km":
             self.indices["G"] = 4   # 定錨 4
-            self.indices["I"] = 3   # 交叉銷售
         elif qa.service_needs == "legal_expense":
             self.indices["I"] = 3   # 解鎖
         elif qa.service_needs == "consolation_money":
@@ -192,13 +190,11 @@ class InsuranceEngine:
                     voluntary += options[v]
 
         subtotal = compulsory + voluntary
-        discount = int(subtotal * DISCOUNT_RATE)
         return {
             "compulsory": compulsory,
             "voluntary": voluntary,
             "subtotal": subtotal,
-            "discount": discount,
-            "final_amount": subtotal - discount,
+            "final_amount": subtotal,
         }
 
     def calculate_radar(self) -> dict:
@@ -307,7 +303,6 @@ class InsuranceEngine:
         compulsory = self._get_compulsory_premium()
         voluntary = sum(item.premium for item in items)
         subtotal = compulsory + voluntary
-        discount = int(subtotal * DISCOUNT_RATE)
 
         # 生成 code
         parts = []
@@ -323,8 +318,7 @@ class InsuranceEngine:
                 compulsory=compulsory,
                 voluntary=voluntary,
                 subtotal=subtotal,
-                discount=discount,
-                final_amount=subtotal - discount,
+                final_amount=subtotal,
             ),
         }
 

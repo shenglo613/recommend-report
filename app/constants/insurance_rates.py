@@ -43,9 +43,6 @@ COMPULSORY_RATES = [
     (None, 1866),
 ]
 
-# 折扣率（PRD 第 7.3 節）
-DISCOUNT_RATE = 0.05
-
 # 套餐名稱對應
 PACKAGE_NAMES = {
     "deluxe": "豪華套餐",

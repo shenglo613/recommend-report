@@ -37,7 +37,6 @@ class PriceSummary(BaseModel):
     compulsory: int = Field(..., description="強制險保費")
     voluntary: int = Field(..., description="任意險保費小計")
     subtotal: int = Field(..., description="總計")
-    discount: int = Field(..., description="折扣金額")
     final_amount: int = Field(..., description="應繳保費")
 
 
