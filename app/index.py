@@ -43,7 +43,7 @@ def create_app() -> FastAPI:
             "http://localhost:3000",
             "http://localhost:8080",
             "https://recommend-report.vercel.app",
-            "https://*.vercel.app",
+            "https://aigis-neon.vercel.app",
         ],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE"],
