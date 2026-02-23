@@ -13,6 +13,12 @@ INSURANCE_RATES = {
     "K": {"name": "失能責任增額", "options": {1: 0, 2: 0, 3: 1500, 4: 2800}},
 }
 
+# 任意險最高保費加總（各險種最高選項加總，用於 budget_profile 雷達維度）
+MAX_VOLUNTARY_PREMIUM = sum(
+    max(opts.values()) for opts in
+    (rate["options"] for rate in INSURANCE_RATES.values())
+)  # = 35,161
+
 # 保額說明
 COVERAGE_AMOUNTS = {
     "A": {1: "200/400/30萬", 2: "200/400/50萬", 3: "300/600/30萬", 4: "300/600/50萬"},

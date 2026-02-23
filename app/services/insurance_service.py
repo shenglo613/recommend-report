@@ -1,3 +1,4 @@
+import asyncio
 import re
 import uuid
 import logging
@@ -18,6 +19,7 @@ from app.models.response import (
     Plans,
     AIProposal,
 )
+
 from app.services.insurance_engine import InsuranceEngine
 from app.services.openai_service import openai_service
 
@@ -75,26 +77,14 @@ class InsuranceService:
             engine.reduce_premium(request.target_amount)
             logger.info(f"After reduce: {engine.indices}")
 
-        # 5. 推薦方案
+        # 5. 推薦方案基本資料
         recommended_code = engine.generate_insurance_code()
         recommended_items = engine.build_items()
         recommended_summary = engine.build_price_summary()
 
-        recommended_plan = RecommendedPlan(
-            name="AI 推薦首選",
-            insurance_code=recommended_code,
-            items=recommended_items,
-            price_summary=recommended_summary,
-        )
-
-        # 6. 小資方案
+        # 6. 小資方案基本資料
         economy_data = engine.build_economy_plan()
-        economy_plan = RecommendedPlan(
-            name="小資基礎選",
-            insurance_code=economy_data["insurance_code"],
-            items=economy_data["items"],
-            price_summary=economy_data["price_summary"],
-        )
+        economy_indices = economy_data["economy_indices"]
 
         # 7. 自訂方案
         custom_plan = CustomPlan(
@@ -103,37 +93,65 @@ class InsuranceService:
             adjustable_items=engine.build_custom_plan(),
         )
 
-        # 8. 雷達圖
-        radar = engine.calculate_radar()
+        # 8. 雷達圖（各方案獨立計算）
+        recommended_radar = engine.calculate_radar()
+        economy_radar = engine.calculate_radar(indices=economy_indices)
 
         # 9. Persona tags
         persona_tags = engine.generate_persona_tags(qa)
 
-        # 10. AI 點評
-        commentary = await openai_service.generate_commentary(
-            persona_tags=persona_tags,
-            insurance_code=recommended_code,
-            package_name=engine.get_package_name(),
-            car_age=engine.car_age,
+        # 10. 計算方案差異（供小資點評使用）
+        diff_data = engine.compute_plan_diff(economy_indices)
+
+        # 11. AI 點評（推薦 + 小資並行呼叫）
+        recommended_commentary, economy_commentary = await asyncio.gather(
+            openai_service.generate_commentary(
+                persona_tags=persona_tags,
+                insurance_code=recommended_code,
+                package_name=engine.get_package_name(),
+                car_age=engine.car_age,
+            ),
+            openai_service.generate_economy_commentary(
+                diff_data=diff_data,
+                package_name=engine.get_package_name(),
+                car_age=engine.car_age,
+            ),
         )
 
-        # 11. 強制險
+        # 12. 組裝方案（含 radar_data 和 commentary）
+        recommended_plan = RecommendedPlan(
+            name="AI 推薦首選",
+            insurance_code=recommended_code,
+            items=recommended_items,
+            price_summary=recommended_summary,
+            radar_data=RadarData(**recommended_radar),
+            commentary=recommended_commentary,
+        )
+
+        economy_plan = RecommendedPlan(
+            name="小資基礎選",
+            insurance_code=economy_data["insurance_code"],
+            items=economy_data["items"],
+            price_summary=economy_data["price_summary"],
+            radar_data=RadarData(**economy_radar),
+            commentary=economy_commentary,
+        )
+
+        # 13. 強制險
         compulsory_premium = engine._get_compulsory_premium()
 
-        # 12. 組裝 response
+        # 14. 組裝 response
         return InsuranceRecommendResponse(
             status="success",
             user_id=f"USR-{uuid.uuid4().hex[:8].upper()}",
             analysis_results=AnalysisResults(
                 persona_tags=persona_tags,
-                radar_data=RadarData(**radar),
                 insurance_code=recommended_code,
             ),
             compulsory_insurance=CompulsoryInsurance(
                 premium=compulsory_premium,
             ),
             ai_proposal=AIProposal(
-                commentary=commentary,
                 plans=Plans(
                     recommended=recommended_plan,
                     economy=economy_plan,

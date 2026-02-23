@@ -1,3 +1,4 @@
+import random
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -5,6 +6,7 @@ from app.constants.insurance_rates import (
     INSURANCE_RATES,
     COVERAGE_AMOUNTS,
     MAX_INDEX,
+    MAX_VOLUNTARY_PREMIUM,
     COMPULSORY_RATES,
     PACKAGE_NAMES,
     REDUCE_PRIORITY,
@@ -142,7 +144,9 @@ class InsuranceEngine:
     def finalize(self):
         """邊界檢查：確保所有序號在合法範圍內（PRD 第 9.4 節）"""
         for k, v in self.indices.items():
-            if v > 0:
+            if v < 0:
+                self.indices[k] = 0
+            elif v > 0:
                 self.indices[k] = max(1, min(MAX_INDEX[k], v))
 
     def reduce_premium(self, target_amount: int):
@@ -197,39 +201,70 @@ class InsuranceEngine:
             "final_amount": subtotal,
         }
 
-    def calculate_radar(self) -> dict:
-        """動態計算雷達圖三維分數（PRD 第 12.3 節）"""
+    def calculate_radar(self, indices: Optional[Dict[str, int]] = None) -> dict:
+        """
+        動態計算雷達圖五維分數（70-95 範圍）
+
+        Args:
+            indices: 外部險種序號 dict，預設使用 self.indices
+        """
+        idx = indices or self.indices
+
         def normalize(code: str, index: int) -> float:
             if index <= 0:
                 return 0.0
             max_val = MAX_INDEX[code]
             if max_val <= 1:
                 return 100.0 if index >= 1 else 0.0
-            if code == "E":
+            if code in ("E", "H"):
                 return (max_val - index) / (max_val - 1) * 100
             return (index - 1) / (max_val - 1) * 100
 
-        # 他人責任 = A + B + K
-        others = [normalize("A", self.indices["A"]), normalize("B", self.indices["B"])]
-        if self.indices.get("K", 0) > 0:
-            others.append(normalize("K", self.indices["K"]))
-        others_liability = sum(others) / len(others)
+        def to_visual(raw_0_100: float) -> int:
+            """映射 0-100 → 70-95，加 ±2 隨機抖動"""
+            base = round(70 + (raw_0_100 / 100) * 25)
+            jitter = random.randint(-2, 2)
+            return max(70, min(95, base + jitter))
 
-        # 自身車體 = E + F + H
-        vehicle = []
-        for code in ["E", "F", "H"]:
-            if self.indices.get(code, 0) > 0:
-                vehicle.append(normalize(code, self.indices[code]))
-        own_vehicle = sum(vehicle) / len(vehicle) if vehicle else 0.0
+        # passenger_preference: C, D（兩者 normalized 取平均）
+        passenger_raw = (normalize("C", idx["C"]) + normalize("D", idx["D"])) / 2
 
-        # 乘客保障 = C + D
-        passenger = [normalize("C", self.indices["C"]), normalize("D", self.indices["D"])]
-        passenger_protection = sum(passenger) / len(passenger)
+        # vehicle_protection: E, F, H（加權平均，H 權重較低因多數人不保）
+        vehicle_weights = {"E": 1.0, "F": 1.0, "H": 0.3}
+        vehicle_pairs = [
+            (normalize(c, idx[c]), vehicle_weights[c])
+            for c in ["E", "F", "H"] if idx.get(c, 0) > 0
+        ]
+        vehicle_raw = (
+            sum(v * w for v, w in vehicle_pairs) / sum(w for _, w in vehicle_pairs)
+            if vehicle_pairs else 0.0
+        )
+
+        # liability_concern: A, B 必算，K 啟用時加入
+        liability_vals = [normalize("A", idx["A"]), normalize("B", idx["B"])]
+        if idx.get("K", 0) > 0:
+            liability_vals.append(normalize("K", idx["K"]))
+        liability_raw = sum(liability_vals) / len(liability_vals)
+
+        # service_needs: G, I, J（僅計算已啟用的險種取平均）
+        service_vals = [normalize(c, idx[c]) for c in ["G", "I", "J"] if idx.get(c, 0) > 0]
+        service_raw = sum(service_vals) / len(service_vals) if service_vals else 0.0
+
+        # budget_profile: voluntary_premium / MAX_VOLUNTARY_PREMIUM
+        voluntary = 0
+        for k, v in idx.items():
+            if v > 0:
+                options = INSURANCE_RATES.get(k, {}).get("options", {})
+                if v in options:
+                    voluntary += options[v]
+        budget_raw = min(voluntary / MAX_VOLUNTARY_PREMIUM * 100, 100.0)
 
         return {
-            "others_liability": round(others_liability),
-            "own_vehicle": round(own_vehicle),
-            "passenger_protection": round(passenger_protection),
+            "passenger_preference": to_visual(passenger_raw),
+            "vehicle_protection": to_visual(vehicle_raw),
+            "liability_concern": to_visual(liability_raw),
+            "service_needs": to_visual(service_raw),
+            "budget_profile": to_visual(budget_raw),
         }
 
     def generate_insurance_code(self) -> str:
@@ -320,6 +355,41 @@ class InsuranceEngine:
                 subtotal=subtotal,
                 final_amount=subtotal,
             ),
+            "economy_indices": economy_indices,
+        }
+
+    def compute_plan_diff(self, economy_indices: Dict[str, int]) -> dict:
+        """計算推薦方案與小資方案的險種變化與保費差異"""
+        changes = []
+        for code in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]:
+            rec_idx = self.indices[code]
+            eco_idx = economy_indices[code]
+            if rec_idx == eco_idx:
+                continue
+            name = INSURANCE_RATES[code]["name"]
+            rec_amount = COVERAGE_AMOUNTS.get(code, {}).get(rec_idx, "不保") if rec_idx > 0 else "不保"
+            eco_amount = COVERAGE_AMOUNTS.get(code, {}).get(eco_idx, "不保") if eco_idx > 0 else "不保"
+            rec_premium = INSURANCE_RATES[code]["options"].get(rec_idx, 0) if rec_idx > 0 else 0
+            eco_premium = INSURANCE_RATES[code]["options"].get(eco_idx, 0) if eco_idx > 0 else 0
+            changes.append({
+                "code": code,
+                "name": name,
+                "recommended": rec_amount,
+                "economy": eco_amount,
+                "premium_diff": rec_premium - eco_premium,
+            })
+
+        rec_total = sum(
+            INSURANCE_RATES[k]["options"].get(v, 0)
+            for k, v in self.indices.items() if v > 0
+        )
+        eco_total = sum(
+            INSURANCE_RATES[k]["options"].get(v, 0)
+            for k, v in economy_indices.items() if v > 0
+        )
+        return {
+            "changes": changes,
+            "total_savings": rec_total - eco_total,
         }
 
     def build_custom_plan(self) -> List[AdjustableItem]:
