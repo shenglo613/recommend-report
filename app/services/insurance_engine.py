@@ -79,65 +79,89 @@ class InsuranceEngine:
             self.indices["E"] = 5  # 車齡 >10 年：不保（強制覆蓋）
 
     def apply_questionnaire(self, qa: AnalysisQA):
-        """第二層：問卷位移邏輯（PRD 第 8 章，每類單選）"""
+        """第二層：問卷位移邏輯（複選版本，兩階段處理）
 
-        # 第一類：車內人安全感（影響 C 乘客、D 駕駛）
-        if qa.passenger_preference == "high_passenger_medical":
-            self.indices["C"] += 1
-        elif qa.passenger_preference == "high_driver_disability":
-            self.indices["D"] += 1
-        elif qa.passenger_preference == "basic_passenger":
-            self.indices["C"] -= 2
-        elif qa.passenger_preference == "high_driver_medical":
-            self.indices["D"] += 1
+        Categories processed sequentially 1→5.
+        Within each category:
+          Phase 1: Apply all relative shifts (+=, -=)
+          Phase 2: Apply all absolute assignments (=)
+        """
 
-        # 第二類：本車愛護程度（影響 E 車體、F 免追償、H 竊盜）
-        if qa.vehicle_protection == "repair_perfectionist":
-            self.indices["E"] -= 1  # E 反向：升級（例如丙升乙）
-        elif qa.vehicle_protection == "waive_subrogation":
-            self.indices["F"] = 3   # 解鎖免追償
-        elif qa.vehicle_protection == "theft_protection":
-            self.indices["H"] = 1   # 解鎖竊盜險
-        elif qa.vehicle_protection == "basic_repair":
-            self.indices["E"] += 2  # E 反向：降級或移除
+        # --- Category 1: 車內人安全感（affects C, D）---
+        for sel in (qa.passenger_preference or []):
+            # Phase 1: all are relative
+            if sel == "high_passenger_medical":
+                self.indices["C"] += 1
+            elif sel == "high_driver_disability":
+                self.indices["D"] += 1
+            elif sel == "basic_passenger":
+                self.indices["C"] -= 2
+            elif sel == "high_driver_medical":
+                self.indices["D"] += 1
+        # Phase 2: no absolutes in this category
 
-        # 第三類：車外人責任心
-        if qa.liability_concern == "high_excess_liability":
-            self.indices["B"] += 2
-        elif qa.liability_concern == "high_bodily_injury":
-            self.indices["K"] = 3   # 解鎖
-        elif qa.liability_concern == "statutory_minimum":
-            self.indices["A"] -= 1
-            self.indices["B"] -= 1
-        elif qa.liability_concern == "high_property_damage":
-            self.indices["A"] += 1
+        # --- Category 2: 本車愛護程度（affects E, F, H）---
+        # Phase 1: relative shifts
+        for sel in (qa.vehicle_protection or []):
+            if sel == "repair_perfectionist":
+                self.indices["E"] -= 1
+            elif sel == "basic_repair":
+                self.indices["E"] += 2
+        # Phase 2: absolute assignments
+        for sel in (qa.vehicle_protection or []):
+            if sel == "waive_subrogation":
+                self.indices["F"] = 3
+            elif sel == "theft_protection":
+                self.indices["H"] = 1
 
-        # 第四類：費用/服務應援（影響 G 救援、I 刑事、J 慰問金）
-        if qa.service_needs == "roadside_assistance_100km":
-            self.indices["G"] = 4   # 定錨 4
-        elif qa.service_needs == "legal_expense":
-            self.indices["I"] = 3   # 解鎖
-        elif qa.service_needs == "consolation_money":
-            self.indices["J"] = 3   # 解鎖
-        elif qa.service_needs == "basic_roadside":
-            self.indices["G"] -= 1
+        # --- Category 3: 車外人責任心（affects A, B, K）---
+        # Phase 1: relative shifts
+        for sel in (qa.liability_concern or []):
+            if sel == "high_excess_liability":
+                self.indices["B"] += 2
+            elif sel == "statutory_minimum":
+                self.indices["A"] -= 1
+                self.indices["B"] -= 1
+            elif sel == "high_property_damage":
+                self.indices["A"] += 1
+        # Phase 2: absolute assignments
+        for sel in (qa.liability_concern or []):
+            if sel == "high_bodily_injury":
+                self.indices["K"] = 3
 
-        # 第五類：全域預算與性格
-        if qa.budget_profile == "safety_first":
-            for k in self.indices:
-                if self.indices[k] > 0:
-                    if k == "E":
-                        self.indices[k] -= 1  # E 反向：升級
-                    else:
-                        self.indices[k] += 1
-        elif qa.budget_profile == "budget_saver":
-            for k in self.indices:
-                if self.indices[k] > 0:
-                    if k == "E":
-                        self.indices[k] = 4   # E 反向：限額丙式
-                    else:
-                        self.indices[k] = 1
-        # best_value / ai_balanced → 不變
+        # --- Category 4: 費用服務應援（affects G, I, J）---
+        # Phase 1: relative shifts
+        for sel in (qa.service_needs or []):
+            if sel == "basic_roadside":
+                self.indices["G"] -= 1
+        # Phase 2: absolute assignments
+        for sel in (qa.service_needs or []):
+            if sel == "roadside_assistance_100km":
+                self.indices["G"] = 4
+            elif sel == "legal_expense":
+                self.indices["I"] = 3
+            elif sel == "consolation_money":
+                self.indices["J"] = 3
+
+        # --- Category 5: 全域預算與性格（affects all enabled）---
+        # Phase 1: relative shifts
+        for sel in (qa.budget_profile or []):
+            if sel == "safety_first":
+                for k in self.indices:
+                    if self.indices[k] > 0:
+                        if k == "E":
+                            self.indices[k] -= 1
+                        else:
+                            self.indices[k] += 1
+        # Phase 2: absolute assignments
+        for sel in (qa.budget_profile or []):
+            if sel == "budget_saver":
+                for k in self.indices:
+                    if self.indices[k] > 0:
+                        if k == "E":
+                            self.indices[k] = 4
+                        else:
+                            self.indices[k] = 1
 
         self.finalize()
 
