@@ -162,6 +162,7 @@ class InsuranceEngine:
                             self.indices[k] = 4
                         else:
                             self.indices[k] = 1
+        # best_value / ai_balanced → intentional no-ops
 
         self.finalize()
 
@@ -456,14 +457,15 @@ class InsuranceEngine:
         }
         tags.append(package_tag.get(self.package, ""))
 
-        # 問卷特徵標籤
+        # 問卷特徵標籤（複選：遍歷每個類別的陣列）
         if qa:
-            for field_val in [
+            for field_vals in [
                 qa.passenger_preference, qa.vehicle_protection,
                 qa.liability_concern, qa.service_needs, qa.budget_profile,
             ]:
-                if field_val and field_val in PERSONA_TAG_MAP:
-                    tags.append(PERSONA_TAG_MAP[field_val])
+                for val in (field_vals or []):
+                    if val in PERSONA_TAG_MAP:
+                        tags.append(PERSONA_TAG_MAP[val])
 
         return [t for t in tags if t]
 

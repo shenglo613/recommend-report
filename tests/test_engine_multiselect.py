@@ -220,3 +220,39 @@ def test_budget_noop_options():
     qa = AnalysisQA(budget_profile=["best_value", "ai_balanced"])
     engine.apply_questionnaire(qa)
     assert engine.indices == snapshot
+
+
+def test_persona_tags_multi_select():
+    """Multi-select should generate tags for each selected option that has a mapping."""
+    engine = _make_engine()
+    qa = AnalysisQA(
+        passenger_preference=["high_passenger_medical", "high_driver_disability"],
+        vehicle_protection=["repair_perfectionist"],
+    )
+    engine.apply_questionnaire(qa)
+    tags = engine.generate_persona_tags(qa)
+    assert "重視家人安全" in tags          # high_passenger_medical
+    assert "家庭經濟支柱" in tags          # high_driver_disability
+    assert "愛車完美主義" in tags          # repair_perfectionist
+
+
+def test_persona_tags_unmapped_options_skipped():
+    """Options without a PERSONA_TAG_MAP entry are silently skipped."""
+    engine = _make_engine()
+    qa = AnalysisQA(
+        passenger_preference=["basic_passenger"],  # not in PERSONA_TAG_MAP
+    )
+    engine.apply_questionnaire(qa)
+    tags = engine.generate_persona_tags(qa)
+    # Should have car-age and package tags, but not a tag for basic_passenger
+    assert "basic_passenger" not in str(tags)
+
+
+def test_persona_tags_empty_list():
+    """Empty lists produce no questionnaire-based tags."""
+    engine = _make_engine()
+    qa = AnalysisQA(passenger_preference=[])
+    engine.apply_questionnaire(qa)
+    tags = engine.generate_persona_tags(qa)
+    # Should only have car-age and package tags
+    assert len(tags) == 2  # e.g., ["準新車車主", "適合豪華保障"]
