@@ -98,3 +98,125 @@ def test_single_select_budget_saver():
                 assert v == 4
             else:
                 assert v == 1
+
+
+def test_multi_select_opposing_cancel_out():
+    """Scenario 1 from spec: +1 and -2 stack to net -1."""
+    engine = _make_engine()
+    base_c = engine.indices["C"]
+    qa = AnalysisQA(passenger_preference=["high_passenger_medical", "basic_passenger"])
+    engine.apply_questionnaire(qa)
+    # C += 1, then C -= 2 → net -1, then finalize clamps
+    expected = max(1, min(4, base_c - 1))
+    assert engine.indices["C"] == expected
+
+
+def test_multi_select_absolute_independent_of_relative():
+    """Scenario 2 from spec: relative on E, absolute on F."""
+    engine = _make_engine()
+    base_e = engine.indices["E"]
+    qa = AnalysisQA(vehicle_protection=["repair_perfectionist", "waive_subrogation"])
+    engine.apply_questionnaire(qa)
+    assert engine.indices["E"] == max(1, base_e - 1)  # E upgraded
+    assert engine.indices["F"] == 3  # F set absolutely
+
+
+def test_multi_select_budget_conflict():
+    """Scenario 3 from spec: budget_saver overrides safety_first."""
+    engine = _make_engine()
+    qa = AnalysisQA(budget_profile=["safety_first", "budget_saver"])
+    engine.apply_questionnaire(qa)
+    for k, v in engine.indices.items():
+        if v > 0:
+            if k == "E":
+                assert v == 4
+            else:
+                assert v == 1
+
+
+def test_cross_category_interaction():
+    """Scenario 4 from spec: vehicle upgrade overwritten by budget_saver."""
+    engine = _make_engine()  # deluxe: E=2
+    qa = AnalysisQA(
+        vehicle_protection=["repair_perfectionist"],  # E -= 1 → E=1
+        budget_profile=["budget_saver"],               # all = 1, E = 4
+    )
+    engine.apply_questionnaire(qa)
+    assert engine.indices["E"] == 4  # budget_saver overwrites
+    for k, v in engine.indices.items():
+        if v > 0 and k != "E":
+            assert v == 1
+
+
+def test_multi_select_all_four_passenger_options():
+    """All four passenger options selected: C+1-2=-1, D+1+1=+2."""
+    engine = _make_engine()
+    base_c = engine.indices["C"]
+    base_d = engine.indices["D"]
+    qa = AnalysisQA(passenger_preference=[
+        "high_passenger_medical",   # C += 1
+        "high_driver_disability",   # D += 1
+        "basic_passenger",          # C -= 2
+        "high_driver_medical",      # D += 1
+    ])
+    engine.apply_questionnaire(qa)
+    expected_c = max(1, min(4, base_c + 1 - 2))
+    expected_d = max(1, min(4, base_d + 1 + 1))
+    assert engine.indices["C"] == expected_c
+    assert engine.indices["D"] == expected_d
+
+
+def test_multi_select_service_all_absolutes():
+    """All absolute options in service_needs."""
+    engine = _make_engine()
+    qa = AnalysisQA(service_needs=[
+        "roadside_assistance_100km",  # G = 4
+        "legal_expense",              # I = 3
+        "consolation_money",          # J = 3
+    ])
+    engine.apply_questionnaire(qa)
+    assert engine.indices["G"] == 4
+    assert engine.indices["I"] == 3
+    assert engine.indices["J"] == 3
+
+
+def test_empty_list_is_noop():
+    """Empty list should behave like None (no changes)."""
+    engine = _make_engine()
+    snapshot = dict(engine.indices)
+    qa = AnalysisQA(
+        passenger_preference=[],
+        vehicle_protection=[],
+        liability_concern=[],
+        service_needs=[],
+        budget_profile=[],
+    )
+    engine.apply_questionnaire(qa)
+    assert engine.indices == snapshot
+
+
+def test_none_is_noop():
+    """None (default) should behave like no answer."""
+    engine = _make_engine()
+    snapshot = dict(engine.indices)
+    qa = AnalysisQA()
+    engine.apply_questionnaire(qa)
+    assert engine.indices == snapshot
+
+
+def test_unknown_options_ignored():
+    """Unknown option values are silently ignored."""
+    engine = _make_engine()
+    snapshot = dict(engine.indices)
+    qa = AnalysisQA(passenger_preference=["nonexistent_option"])
+    engine.apply_questionnaire(qa)
+    assert engine.indices == snapshot
+
+
+def test_budget_noop_options():
+    """best_value and ai_balanced are explicit no-ops."""
+    engine = _make_engine()
+    snapshot = dict(engine.indices)
+    qa = AnalysisQA(budget_profile=["best_value", "ai_balanced"])
+    engine.apply_questionnaire(qa)
+    assert engine.indices == snapshot
