@@ -256,3 +256,49 @@ def test_persona_tags_empty_list():
     tags = engine.generate_persona_tags(qa)
     # Should only have car-age and package tags
     assert len(tags) == 2  # e.g., ["準新車車主", "適合豪華保障"]
+
+
+def test_full_flow_multi_select():
+    """Integration: full engine flow with multi-select QA."""
+    engine = _make_engine(reg_year=2023, displacement=1998)
+
+    qa = AnalysisQA(
+        passenger_preference=["high_passenger_medical", "high_driver_disability"],
+        vehicle_protection=["repair_perfectionist", "waive_subrogation"],
+        liability_concern=["high_excess_liability", "high_property_damage"],
+        service_needs=["roadside_assistance_100km", "legal_expense", "consolation_money"],
+        budget_profile=["safety_first"],
+    )
+    engine.apply_questionnaire(qa)
+
+    # Verify indices are within valid ranges
+    from app.constants.insurance_rates import MAX_INDEX
+    for k, v in engine.indices.items():
+        if v > 0:
+            assert 1 <= v <= MAX_INDEX[k], f"{k} index {v} out of range"
+
+    # Verify items can be built
+    items = engine.build_items()
+    assert len(items) > 0
+
+    # Verify premium calculation works
+    premium = engine.calculate_premium()
+    assert premium["voluntary"] > 0
+    assert premium["compulsory"] > 0
+
+    # Verify radar calculation works
+    radar = engine.calculate_radar()
+    for dim in ["passenger_preference", "vehicle_protection", "liability_concern",
+                "service_needs", "budget_profile"]:
+        assert 70 <= radar[dim] <= 95
+
+    # Verify persona tags include multi-select tags
+    tags = engine.generate_persona_tags(qa)
+    assert "重視家人安全" in tags
+    assert "家庭經濟支柱" in tags
+    assert "愛車完美主義" in tags
+
+    # Verify insurance code generation
+    code = engine.generate_insurance_code()
+    assert len(code) > 0
+    assert code[0] == "A"  # A is always present
