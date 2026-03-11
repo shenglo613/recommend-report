@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
@@ -23,20 +23,20 @@ class Profile(BaseModel):
 
 
 class AnalysisQA(BaseModel):
-    """五大維度生活化問卷（每類單選，皆為 Optional）"""
-    passenger_preference: Optional[str] = Field(
+    """五大維度生活化問卷（每類複選，皆為 Optional）"""
+    passenger_preference: Optional[List[str]] = Field(
         None, description="車內人安全感: high_passenger_medical|high_driver_disability|basic_passenger|high_driver_medical"
     )
-    vehicle_protection: Optional[str] = Field(
+    vehicle_protection: Optional[List[str]] = Field(
         None, description="本車愛護程度: repair_perfectionist|waive_subrogation|theft_protection|basic_repair"
     )
-    liability_concern: Optional[str] = Field(
+    liability_concern: Optional[List[str]] = Field(
         None, description="車外人責任心: high_excess_liability|high_bodily_injury|statutory_minimum|high_property_damage"
     )
-    service_needs: Optional[str] = Field(
+    service_needs: Optional[List[str]] = Field(
         None, description="費用服務應援: roadside_assistance_100km|legal_expense|consolation_money|basic_roadside"
     )
-    budget_profile: Optional[str] = Field(
+    budget_profile: Optional[List[str]] = Field(
         None, description="預算與性格: safety_first|best_value|budget_saver|ai_balanced"
     )
 
